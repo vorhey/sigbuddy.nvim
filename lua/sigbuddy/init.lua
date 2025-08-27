@@ -1,0 +1,268 @@
+local M = {}
+
+-- Check if plenary async is available
+local has_plenary, async = pcall(require, "plenary.async")
+if not has_plenary then
+  -- Fallback for environments without plenary
+  async = {
+    void = function(fn)
+      return fn
+    end,
+    run = function(fn, callback)
+      local success, result = pcall(fn)
+      if callback then
+        callback(success, result)
+      end
+    end,
+  }
+end
+
+-- Setup function (synchronous)
+function M.setup(opts)
+  local success, config = pcall(require, "sigbuddy.config")
+  if not success then
+    error("Failed to load sigbuddy.config: " .. config)
+  end
+
+  config.setup(opts)
+end
+
+-- Get current status information
+function M.get_status()
+  local success, config = pcall(require, "sigbuddy.config")
+  if not success then
+    return "SigBuddy: Error loading configuration"
+  end
+
+  if not config.options then
+    return "SigBuddy: Not initialized. Call require('sigbuddy').setup() first."
+  end
+
+  local cache_success, cache = pcall(require, "sigbuddy.cache")
+  local cache_stats = cache_success and cache.get_stats() or { total_entries = 0, total_size = 0 }
+
+  local status_lines = {
+    "SigBuddy Status:",
+    "  Provider: " .. (config.options.provider or "none"),
+    "  Cache: " .. (config.options.cache_enabled and "enabled" or "disabled"),
+    "  Cache entries: " .. cache_stats.total_entries,
+    "  Cache size: " .. math.floor(cache_stats.total_size / 1024) .. "KB",
+  }
+
+  return table.concat(status_lines, "\n")
+end
+
+-- Pick AI provider interactively
+function M.pick_provider()
+  local success, providers = pcall(require, "sigbuddy.providers")
+  if not success then
+    print("SigBuddy: Error loading providers")
+    return
+  end
+
+  providers.pick_provider()
+end
+
+-- Main explanation function (async)
+M.explain = async.void(function()
+  -- Check if plugin is initialized
+  local config = require("sigbuddy.config")
+  if not config.options then
+    print("SigBuddy: Plugin not initialized. Please run :lua require('sigbuddy').setup()")
+    return
+  end
+
+  local detector = require("sigbuddy.detector")
+  local cache = require("sigbuddy.cache")
+  local providers = require("sigbuddy.providers")
+  local ui = require("sigbuddy.ui")
+
+  -- Step 1: Detect function under cursor
+  local function_info
+  local success, result = pcall(detector.get_function_under_cursor)
+
+  if not success then
+    -- Handle detector errors gracefully
+    print("SigBuddy: Error detecting function - " .. tostring(result))
+    return
+  end
+
+  function_info = result
+  if not function_info then
+    -- No function detected, silently return
+    return
+  end
+
+  -- Step 2: Check cache first
+  local cached_explanation = cache.get(function_info)
+  if cached_explanation then
+    -- Cache hit - show explanation immediately
+    vim.schedule(function()
+      ui.show_explanation(cached_explanation, function_info)
+    end)
+    return
+  end
+
+  -- Step 3: Show loading indicator
+  local loading_win
+  vim.schedule(function()
+    loading_win = ui.show_loading(function_info)
+  end)
+
+  -- Step 4: Get AI explanation asynchronously
+  local explanation
+
+  -- Execute AI request in background
+  async.run(function()
+    local provider_success, provider_result = pcall(function()
+      local provider = providers.get_current_provider()
+      local provider_config = config.get_provider_config()
+
+      if not provider_config then
+        return {
+          status = "error",
+          error = "Provider configuration not found for " .. (config.options.provider or "unknown"),
+        }
+      end
+
+      return provider.get_explanation(function_info, provider_config)
+    end)
+
+    if provider_success then
+      explanation = provider_result
+    else
+      explanation = {
+        status = "error",
+        error = "Provider error: " .. tostring(provider_result),
+      }
+    end
+
+    return explanation
+  end, function(async_success, async_result)
+    -- This callback runs when the async operation completes
+
+    if not async_success then
+      explanation = {
+        status = "error",
+        error = "Async operation failed: " .. tostring(async_result),
+      }
+    else
+      explanation = async_result
+    end
+
+    -- Step 5: Update UI on main thread
+    vim.schedule(function()
+      -- Close loading indicator
+      if loading_win then
+        ui.close_loading(loading_win)
+      end
+
+      -- Cache the result (only if successful)
+      if explanation and explanation.status == "success" then
+        cache.set(function_info, explanation)
+      end
+
+      -- Show the explanation
+      if explanation then
+        ui.show_explanation(explanation, function_info)
+      end
+    end)
+  end)
+end)
+
+-- Synchronous version for cases where async is not needed
+function M.explain_sync()
+  -- Check if plugin is initialized
+  local config = require("sigbuddy.config")
+  if not config.options then
+    print("SigBuddy: Plugin not initialized. Please run :lua require('sigbuddy').setup()")
+    return
+  end
+
+  local detector = require("sigbuddy.detector")
+  local cache = require("sigbuddy.cache")
+  local providers = require("sigbuddy.providers")
+  local ui = require("sigbuddy.ui")
+
+  -- Detect function under cursor
+  local success, function_info = pcall(detector.get_function_under_cursor)
+  if not success or not function_info then
+    return
+  end
+
+  -- Check cache
+  local cached_explanation = cache.get(function_info)
+  if cached_explanation then
+    ui.show_explanation(cached_explanation, function_info)
+    return
+  end
+
+  -- Show loading
+  local loading_win = ui.show_loading(function_info)
+
+  -- Get AI explanation
+  local explanation
+  local provider_success, provider_result = pcall(function()
+    local provider = providers.get_current_provider()
+    local provider_config = config.get_provider_config()
+
+    if not provider_config then
+      return {
+        status = "error",
+        error = "Provider configuration not found",
+      }
+    end
+
+    return provider.get_explanation(function_info, provider_config)
+  end)
+
+  if provider_success then
+    explanation = provider_result
+  else
+    explanation = {
+      status = "error",
+      error = "Provider error: " .. tostring(provider_result),
+    }
+  end
+
+  -- Close loading and show result
+  ui.close_loading(loading_win)
+
+  if explanation then
+    if explanation.status == "success" then
+      cache.set(function_info, explanation)
+    end
+    ui.show_explanation(explanation, function_info)
+  end
+end
+
+-- Utility functions for testing and debugging
+function M._get_function_under_cursor()
+  local detector = require("sigbuddy.detector")
+  return detector.get_function_under_cursor()
+end
+
+function M._cleanup_cache()
+  local cache = require("sigbuddy.cache")
+  return cache.cleanup_expired()
+end
+
+function M._close_all_windows()
+  local ui = require("sigbuddy.ui")
+  ui.close_all_windows()
+end
+
+function M._test_ui()
+  local ui = require("sigbuddy.ui")
+  local test_explanation = {
+    status = "success",
+    explanation = "This is a test explanation.\nMultiple lines work too."
+  }
+  local test_function_info = {
+    function_name = "test_function",
+    language = "lua"
+  }
+  ui.show_explanation(test_explanation, test_function_info)
+end
+
+return M

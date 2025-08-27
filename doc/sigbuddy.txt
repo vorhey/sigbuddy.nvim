@@ -1,0 +1,230 @@
+*sigbuddy.txt*    AI-powered signature help for Neovim built-in functions
+
+                      _____ _       ____            _     _       ~
+                     / ____(_)     |  _ \          | |   | |      ~
+                    | (___  _  __ _| |_) |_   _  __| | __| |_   _ ~
+                     \___ \| |/ _` |  _ <| | | |/ _` |/ _` | | | |~
+                     ____) | | (_| | |_) | |_| | (_| | (_| | |_| |~
+                    |_____/|_|\__, |____/ \__,_|\__,_|\__,_|\__, |~
+                               __/ |                        __/ |~
+                              |___/                        |___/ ~
+
+                         AI-powered function explanations!
+
+==============================================================================
+CONTENTS                                                     *sigbuddy-contents*
+
+    1. Introduction ...................... |sigbuddy-introduction|
+    2. Requirements ...................... |sigbuddy-requirements|
+    3. Installation ...................... |sigbuddy-installation|
+    4. Configuration ..................... |sigbuddy-configuration|
+    5. Usage ............................. |sigbuddy-usage|
+    6. Commands .......................... |sigbuddy-commands|
+    7. Functions ......................... |sigbuddy-functions|
+    8. Troubleshooting ................... |sigbuddy-troubleshooting|
+    9. License ........................... |sigbuddy-license|
+
+==============================================================================
+INTRODUCTION                                             *sigbuddy-introduction*
+
+SigBuddy is an AI-powered Neovim plugin that provides instant explanations for
+built-in programming language functions. When you place your cursor on a
+function like `print()`, `len()`, or `Array.isArray()`, SigBuddy asks your
+chosen AI provider for a brief explanation and usage example.
+
+⚠️  EXPERIMENTAL PROJECT ⚠️
+This plugin was built during a live coding session as an educational exercise.
+Expect bugs, breaking changes, and existential dread. Not recommended for
+production use!
+
+==============================================================================
+REQUIREMENTS                                             *sigbuddy-requirements*
+
+- Neovim 0.8+ (for tree-sitter support)
+- plenary.nvim (for async operations)
+- API key for your chosen AI provider
+- Internet connection (unless using Ollama locally)
+- Patience for experimental software
+
+==============================================================================
+INSTALLATION                                             *sigbuddy-installation*
+
+Using lazy.nvim: >
+    {
+      "your-username/sigbuddy.nvim",
+      dependencies = { "nvim-lua/plenary.nvim" },
+      config = function()
+        require("sigbuddy").setup({
+          provider = "openai",
+          providers = {
+            openai = {
+              api_key = os.getenv("OPENAI_API_KEY"),
+              model = "gpt-4o-mini"
+            }
+          }
+        })
+      end
+    }
+<
+
+==============================================================================
+CONFIGURATION                                           *sigbuddy-configuration*
+
+Setup SigBuddy with your preferred settings: >
+
+    require("sigbuddy").setup({
+      -- AI Provider
+      provider = "openai", -- "openai", "anthropic", "gemini", "ollama"
+      
+      -- Cache settings
+      cache_enabled = true,
+      cache_ttl = 604800, -- 1 week in seconds
+      cache_dir = vim.fn.stdpath("data") .. "/sigbuddy/cache",
+      
+      -- UI settings
+      ui = {
+        popup_type = "popup", -- "popup", "horizontal", "vertical"
+        border = "rounded",
+        max_width = 80,
+        max_height = 20
+      },
+      
+      -- Provider configurations
+      providers = {
+        openai = {
+          api_key = os.getenv("OPENAI_API_KEY"),
+          model = "gpt-4o-mini"
+        },
+        anthropic = {
+          api_key = os.getenv("ANTHROPIC_API_KEY"),
+          model = "claude-3-haiku-20240307"
+        },
+        gemini = {
+          api_key = os.getenv("GEMINI_API_KEY"),
+          model = "gemini-1.5-flash"
+        },
+        ollama = {
+          model = "llama2",
+          endpoint = "http://localhost:11434/api/generate"
+        }
+      }
+    })
+<
+
+Configuration Options:~
+
+`provider`          string: AI provider to use ("openai", "anthropic", "gemini", "ollama")
+`language`          string: Language for explanations (default: "english")
+`cache_enabled`     boolean: Enable response caching (default: true)
+`cache_ttl`         number: Cache time-to-live in seconds (default: 604800)
+`cache_dir`         string: Directory for cache files
+`ui.popup_type`     string: Window type ("popup", "horizontal", "vertical")
+`ui.border`         string: Border style ("rounded", "single", "double", etc.)
+`ui.max_width`      number: Maximum window width (default: 80)
+`ui.max_height`     number: Maximum window height (default: 20)
+`providers`         table: Provider-specific configurations
+
+==============================================================================
+USAGE                                                           *sigbuddy-usage*
+
+1. Position your cursor on a built-in function
+2. Run |:SigBuddy| or use your custom keybinding
+3. SigBuddy detects the function and queries the AI
+4. A floating window shows the explanation and example
+5. Press 'q', <Esc>, or <Enter> to close the window
+
+Key Mappings:~
+SigBuddy provides <Plug> mappings for customization: >
+
+    " Example keybindings
+    nmap <leader>sf <Plug>SigBuddyExplain
+    nmap <leader>sp <Plug>SigBuddyPickProvider
+
+    " Or using Lua
+    vim.keymap.set('n', '<leader>sf', '<cmd>SigBuddy<CR>')
+    vim.keymap.set('n', '<leader>sp', '<cmd>SigBuddyPickProvider<CR>')
+<
+
+==============================================================================
+COMMANDS                                                     *sigbuddy-commands*
+
+                                                                     *:SigBuddy*
+:SigBuddy               Explain the built-in function under cursor.
+
+                                                          *:SigBuddyPickProvider*
+:SigBuddyPickProvider   Interactively choose AI provider.
+
+                                                             *:SigBuddyStatus*
+:SigBuddyStatus         Show plugin status and cache information.
+
+==============================================================================
+FUNCTIONS                                                   *sigbuddy-functions*
+
+                                                            *sigbuddy.setup()*
+sigbuddy.setup({opts})
+    Initialize SigBuddy with configuration options.
+    
+    Parameters: ~
+        {opts} (table|nil) Configuration options
+
+                                                           *sigbuddy.explain()*
+sigbuddy.explain()
+    Explain the built-in function under cursor (async version).
+
+                                                      *sigbuddy.explain_sync()*
+sigbuddy.explain_sync()
+    Explain the built-in function under cursor (synchronous version).
+
+                                                        *sigbuddy.get_status()*
+sigbuddy.get_status()
+    Get current plugin status as a string.
+
+                                                      *sigbuddy.pick_provider()*
+sigbuddy.pick_provider()
+    Interactively select AI provider.
+
+==============================================================================
+TROUBLESHOOTING                                       *sigbuddy-troubleshooting*
+
+Common Issues:~
+
+Plugin not working:~
+- Ensure you called `require("sigbuddy").setup()`
+- Check that you have valid API keys set
+- Verify internet connection (unless using Ollama)
+
+Function not detected:~
+- Make sure cursor is positioned on the function name
+- Check if tree-sitter parser is installed for your language
+- Try with simple built-in functions like `print()` first
+
+API errors:~
+- Verify API key is correct and has sufficient credits
+- Check API key permissions and rate limits
+- Try switching providers with `:SigBuddyPickProvider`
+
+Debugging Commands:~
+>
+    " Check plugin status
+    :lua print(require("sigbuddy").get_status())
+    
+    " Test function detection
+    :lua print(vim.inspect(require("sigbuddy")._get_function_under_cursor()))
+    
+    " Clean expired cache
+    :lua print("Cleaned " .. require("sigbuddy")._cleanup_cache() .. " entries")
+    
+    " Force close all windows
+    :lua require("sigbuddy")._close_all_windows()
+<
+
+==============================================================================
+LICENSE                                                       *sigbuddy-license*
+
+MIT License. See LICENSE file for details.
+
+This plugin was created during a live coding session for educational purposes.
+Use at your own risk and expect experimental behavior!
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

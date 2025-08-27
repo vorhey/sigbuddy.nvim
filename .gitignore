@@ -1,0 +1,32 @@
+# Lua
+*.lua~
+*.luac
+luac.out
+
+# LuaRocks
+lua_modules/
+.luarocks/
+
+# Testing
+*.tmp
+*.log
+
+# Cache
+cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# API Keys (important!)
+.env
+.env.local
+*.key
+api_keys.txt
