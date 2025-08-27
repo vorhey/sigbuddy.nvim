@@ -1,7 +1,7 @@
 local M = {}
 
 -- Get surrounding context for better AI understanding
-local function get_context(lines, current_line_num, function_name)
+local function get_context(lines, current_line_num)
   local context_lines = {}
   local start_line = math.max(1, current_line_num - 1)
   local end_line = math.min(#lines, current_line_num + 1)
@@ -17,7 +17,7 @@ local function get_context(lines, current_line_num, function_name)
 end
 
 -- Fallback function detection using regex (for testing and when tree-sitter unavailable)
-local function fallback_get_function_info(line, col, language)
+local function fallback_get_function_info(line, col)
   -- Helper function to extract word under cursor position
   local function get_word_under_cursor(text, cursor_col)
     if not text or text == "" or cursor_col < 0 then
@@ -119,8 +119,9 @@ local function treesitter_get_function_info(buf, row, col, language)
     return nil
   end
 
-  local has_parser, parser = pcall(vim.treesitter.get_parser, buf, language)
-  if not has_parser then
+  local _, parser = pcall(vim.treesitter.get_parser, buf, language)
+
+  if not parser then
     return nil
   end
 
@@ -173,7 +174,13 @@ local function treesitter_get_function_info(buf, row, col, language)
       end
     end
 
-    current_node = current_node:parent()
+    local parent_node = current_node:parent()
+
+    if not parent_node then
+      break
+    end
+
+    current_node = parent_node
   end
 
   return nil
@@ -207,15 +214,16 @@ function M.get_function_under_cursor()
 
   if not function_name then
     -- Fallback to regex-based detection
-    function_name, call_type = fallback_get_function_info(current_line, col, language)
+    function_name, call_type = fallback_get_function_info(current_line, col)
   end
 
   if not function_name then
+    vim.notify("No function or method call found under cursor", vim.log.levels.INFO)
     return nil
   end
 
   -- Get context for AI
-  local context = get_context(all_lines, row + 1, function_name) -- Convert back to 1-indexed
+  local context = get_context(all_lines, row + 1)
 
   return {
     function_name = function_name,
