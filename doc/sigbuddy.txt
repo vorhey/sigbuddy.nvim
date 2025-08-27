@@ -75,12 +75,12 @@ Setup SigBuddy with your preferred settings: >
     require("sigbuddy").setup({
       -- AI Provider
       provider = "openai", -- "openai", "anthropic", "gemini", "ollama"
-      
+
       -- Cache settings
       cache_enabled = true,
       cache_ttl = 604800, -- 1 week in seconds
       cache_dir = vim.fn.stdpath("data") .. "/sigbuddy/cache",
-      
+
       -- UI settings
       ui = {
         popup_type = "popup", -- "popup", "horizontal", "vertical"
@@ -88,7 +88,7 @@ Setup SigBuddy with your preferred settings: >
         max_width = 80,
         max_height = 20
       },
-      
+
       -- Provider configurations
       providers = {
         openai = {
@@ -163,7 +163,7 @@ FUNCTIONS                                                   *sigbuddy-functions*
                                                             *sigbuddy.setup()*
 sigbuddy.setup({opts})
     Initialize SigBuddy with configuration options.
-    
+
     Parameters: ~
         {opts} (table|nil) Configuration options
 
@@ -171,9 +171,7 @@ sigbuddy.setup({opts})
 sigbuddy.explain()
     Explain the built-in function under cursor (async version).
 
-                                                      *sigbuddy.explain_sync()*
-sigbuddy.explain_sync()
-    Explain the built-in function under cursor (synchronous version).
+
 
                                                         *sigbuddy.get_status()*
 sigbuddy.get_status()
@@ -207,13 +205,13 @@ Debugging Commands:~
 >
     " Check plugin status
     :lua print(require("sigbuddy").get_status())
-    
+
     " Test function detection
     :lua print(vim.inspect(require("sigbuddy")._get_function_under_cursor()))
-    
+
     " Clean expired cache
     :lua print("Cleaned " .. require("sigbuddy")._cleanup_cache() .. " entries")
-    
+
     " Force close all windows
     :lua require("sigbuddy")._close_all_windows()
 <

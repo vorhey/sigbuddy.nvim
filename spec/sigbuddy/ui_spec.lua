@@ -102,9 +102,9 @@ describe("sigbuddy.ui", function()
     vim.o = original_o
     vim.split = original_split
     vim.deepcopy = original_deepcopy
-  vim.bo = nil
-  vim.wo = nil
-  vim.keymap = nil
+    vim.bo = nil
+    vim.wo = nil
+    vim.keymap = nil
   end)
 
   describe("format_explanation", function()
@@ -167,8 +167,8 @@ describe("sigbuddy.ui", function()
       local formatted = ui.format_explanation(explanation, function_info)
 
       assert.is_table(formatted.lines)
-  -- The refactored formatter no longer auto-wraps long lines; ensure we have at least one line
-  assert.is_true(#formatted.lines >= 1)
+      -- The refactored formatter no longer auto-wraps long lines; ensure we have at least one line
+      assert.is_true(#formatted.lines >= 1)
     end)
   end)
 

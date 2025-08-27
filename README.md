@@ -169,6 +169,20 @@ luarocks --local install busted --lua-version=5.1
 eval $(luarocks --local path) && busted
 ```
 
+### Code Formatting
+
+This project uses [StyLua](https://github.com/JohnnyMorganz/StyLua) for code formatting. To format the code, run:
+
+```bash
+stylua .
+```
+
+To check for formatting issues without modifying files:
+
+```bash
+stylua --check .
+```
+
 ### Architecture
 
 - `lua/sigbuddy/init.lua` - Main orchestration with async support

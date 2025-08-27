@@ -26,7 +26,7 @@ local function create_popup(title, content_lines, ui_config)
   vim.bo[buf].modifiable = false
   vim.bo[buf].filetype = "markdown"
 
-  local win = vim.api.nvim_open_win(buf, true, config)  -- Focus the window
+  local win = vim.api.nvim_open_win(buf, true, config) -- Focus the window
 
   -- Enable text wrapping
   vim.wo[win].wrap = true
@@ -39,7 +39,7 @@ local function create_popup(title, content_lines, ui_config)
       vim.api.nvim_win_close(win, true)
     end
   end, { buffer = buf, noremap = true, silent = true })
-  
+
   vim.keymap.set("n", "<Esc>", function()
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
@@ -144,4 +144,3 @@ function M.close_all_windows()
 end
 
 return M
-

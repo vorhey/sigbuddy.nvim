@@ -50,7 +50,6 @@ describe("sigbuddy", function()
       -- The module should load and work even without plenary
       assert.is_not_nil(sigbuddy)
       assert.is_function(sigbuddy.explain)
-      assert.is_function(sigbuddy.explain_sync)
     end)
   end)
 

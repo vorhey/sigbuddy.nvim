@@ -12,7 +12,6 @@ sigbuddy-requirements	sigbuddy.txt	/*sigbuddy-requirements*
 sigbuddy-troubleshooting	sigbuddy.txt	/*sigbuddy-troubleshooting*
 sigbuddy-usage	sigbuddy.txt	/*sigbuddy-usage*
 sigbuddy.explain()	sigbuddy.txt	/*sigbuddy.explain()*
-sigbuddy.explain_sync()	sigbuddy.txt	/*sigbuddy.explain_sync()*
 sigbuddy.get_status()	sigbuddy.txt	/*sigbuddy.get_status()*
 sigbuddy.pick_provider()	sigbuddy.txt	/*sigbuddy.pick_provider()*
 sigbuddy.setup()	sigbuddy.txt	/*sigbuddy.setup()*
