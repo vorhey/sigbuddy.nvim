@@ -89,7 +89,6 @@ M.explain = async.void(function()
 
   function_info = result
   if not function_info then
-    -- No function detected, silently return
     return
   end
 
@@ -110,48 +109,28 @@ M.explain = async.void(function()
   end)
 
   -- Step 4: Get AI explanation asynchronously
-  local explanation
+  local provider_success, provider_error = pcall(function()
+    local provider = providers.get_current_provider()
+    local provider_config = config.get_provider_config()
 
-  -- Execute AI request in background
-  async.run(function()
-    local provider_success, provider_result = pcall(function()
-      local provider = providers.get_current_provider()
-      local provider_config = config.get_provider_config()
-
-      if not provider_config then
-        return {
+    if not provider_config then
+      -- Handle config error immediately
+      vim.schedule(function()
+        if loading_win then
+          ui.close_loading(loading_win)
+        end
+        local error_explanation = {
           status = "error",
           error = "Provider configuration not found for " .. (config.options.provider or "unknown"),
         }
-      end
-
-      return provider.get_explanation(function_info, provider_config)
-    end)
-
-    if provider_success then
-      explanation = provider_result
-    else
-      explanation = {
-        status = "error",
-        error = "Provider error: " .. tostring(provider_result),
-      }
+        ui.show_explanation(error_explanation, function_info)
+      end)
+      return
     end
 
-    return explanation
-  end, function(async_success, async_result)
-    -- This callback runs when the async operation completes
-
-    if not async_success then
-      explanation = {
-        status = "error",
-        error = "Async operation failed: " .. tostring(async_result),
-      }
-    else
-      explanation = async_result
-    end
-
-    -- Step 5: Update UI on main thread
-    vim.schedule(function()
+    -- Make async request with callback
+    provider.get_explanation(function_info, provider_config, function(explanation)
+      -- This callback runs when the async operation completes
       -- Close loading indicator
       if loading_win then
         ui.close_loading(loading_win)
@@ -168,6 +147,20 @@ M.explain = async.void(function()
       end
     end)
   end)
+
+  -- Handle provider setup errors
+  if not provider_success then
+    vim.schedule(function()
+      if loading_win then
+        ui.close_loading(loading_win)
+      end
+      local error_explanation = {
+        status = "error",
+        error = "Provider error: " .. tostring(provider_error),
+      }
+      ui.show_explanation(error_explanation, function_info)
+    end)
+  end
 end)
 
 -- Synchronous version for cases where async is not needed
@@ -256,11 +249,11 @@ function M._test_ui()
   local ui = require("sigbuddy.ui")
   local test_explanation = {
     status = "success",
-    explanation = "This is a test explanation.\nMultiple lines work too."
+    explanation = "This is a test explanation.\nMultiple lines work too.",
   }
   local test_function_info = {
     function_name = "test_function",
-    language = "lua"
+    language = "lua",
   }
   ui.show_explanation(test_explanation, test_function_info)
 end

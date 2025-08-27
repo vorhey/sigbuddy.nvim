@@ -8,7 +8,7 @@ vim.g.loaded_sigbuddy = 1
 
 -- Create user commands
 vim.api.nvim_create_user_command("SigBuddy", function()
-  require("sigbuddy").explain_sync()
+  require("sigbuddy").explain()
 end, {
   desc = "Show AI-powered explanation for function under cursor",
 })
@@ -27,7 +27,7 @@ end, {
 
 -- Create <Plug> mappings for user customization
 vim.keymap.set("n", "<Plug>SigBuddyExplain", function()
-  require("sigbuddy").explain_sync()
+  require("sigbuddy").explain()
 end, { desc = "SigBuddy: Explain function under cursor" })
 
 vim.keymap.set("n", "<Plug>SigBuddyPickProvider", function()
