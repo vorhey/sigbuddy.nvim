@@ -7,135 +7,184 @@ local function get_context(lines, current_line_num)
   local end_line = math.min(#lines, current_line_num + 1)
 
   for i = start_line, end_line do
-    if lines[i] and lines[i]:match("%S") then -- Skip empty lines
-      local trimmed_line = lines[i]:gsub("^%s+", "") -- Trim leading whitespace
-      table.insert(context_lines, trimmed_line)
+    local line = lines[i]
+    if line and line:match("%S") then
+      -- trim leading whitespace only (preserve indentation-aware content after)
+      context_lines[#context_lines + 1] = line:gsub("^%s+", "")
     end
   end
 
   return table.concat(context_lines, "\n")
 end
 
+-- Returns word, start_pos, end_pos (1-indexed) under cursor if any.
+local function get_word_bounds(text, cursor_col)
+  if not text or text == "" or cursor_col < 0 then
+    return nil, nil, nil
+  end
+
+  -- cursor_col comes in 0-indexed from Neovim API; convert to 1-indexed position
+  local pos = math.min(#text, cursor_col + 1)
+  pos = math.max(1, pos)
+
+  -- find start
+  local start_pos = pos
+  while start_pos > 1 and text:sub(start_pos - 1, start_pos - 1):match("[%w_]") do
+    start_pos = start_pos - 1
+  end
+
+  -- find end
+  local end_pos = pos
+  while end_pos <= #text and text:sub(end_pos, end_pos):match("[%w_]") do
+    end_pos = end_pos + 1
+  end
+  end_pos = end_pos - 1
+
+  if start_pos > end_pos then
+    return nil, nil, nil
+  end
+
+  return text:sub(start_pos, end_pos), start_pos, end_pos
+end
+
+-- Function call detection helper functions
+local function escape_pattern(text)
+  return text:gsub("([%.%+%-%%%(%)%[%]%*%?%^%$])", "%%%1")
+end
+
+-- Method detection helper functions
+local function get_line_segment(line, start_pos, end_pos)
+  local before_word_start = math.max(1, start_pos - 20)
+  local after_word_end = math.min(#line, end_pos + 20)
+  return line:sub(before_word_start, after_word_end)
+end
+
+local function find_full_method(line_segment, word)
+  local pattern = "([%w_%.]+%." .. escape_pattern(word) .. ")%s*%("
+  return line_segment:match(pattern)
+end
+
+local function find_method_name(line_segment, word)
+  local pattern = escape_pattern(word) .. "%.([%w_]+)%s*%("
+  return line_segment:match(pattern)
+end
+
 -- Fallback function detection using regex (for testing and when tree-sitter unavailable)
 local function fallback_get_function_info(line, col)
-  -- Helper function to extract word under cursor position
-  local function get_word_under_cursor(text, cursor_col)
-    if not text or text == "" or cursor_col < 0 then
-      return ""
-    end
-
-    if cursor_col >= #text then
-      cursor_col = #text - 1
-    end
-
-    -- Find word boundaries (alphanumeric + underscore)
-    local start_pos = cursor_col
-    local end_pos = cursor_col
-
-    -- Move backward to find start of word
-    while start_pos > 0 and text:sub(start_pos, start_pos):match("[%w_]") do
-      start_pos = start_pos - 1
-    end
-    if not text:sub(start_pos + 1, start_pos + 1):match("[%w_]") then
-      start_pos = start_pos + 1
-    end
-
-    -- Move forward to find end of word
-    while end_pos < #text and text:sub(end_pos + 1, end_pos + 1):match("[%w_]") do
-      end_pos = end_pos + 1
-    end
-
-    if start_pos <= end_pos then
-      return text:sub(start_pos + 1, end_pos)
-    else
-      return ""
-    end
-  end
-
-  -- Check if word is followed by parentheses (function call)
-  local function is_function_call(text, word, cursor_col)
-    if not word or word == "" then
-      return false
-    end
-
-    -- Find the word in the line
-    local word_pattern = "%f[%w_]"
-      .. word:gsub("([%.%+%-%%%(%)%[%]%*%?%^%$])", "%%%1")
-      .. "%f[^%w_]"
-    local word_start, word_end = text:find(word_pattern)
-
-    if not word_start then
-      return false
-    end
-
-    -- Check if cursor is within the word
-    if cursor_col < word_start - 1 or cursor_col >= word_end then
-      return false
-    end
-
-    -- Look for opening parenthesis after the word
-    local after_word = text:sub(word_end + 1):match("^%s*(.)")
-    return after_word == "("
-  end
-
-  local word = get_word_under_cursor(line, col)
-  if not word or word == "" then
+  local word, start_pos, end_pos = get_word_bounds(line, col)
+  if not word then
     return nil
   end
 
   -- Check for method call pattern (object.method)
-  local before_word_start = math.max(1, col - #word - 20)
-  local after_word_end = math.min(#line, col + #word + 20)
-  local line_segment = line:sub(before_word_start, after_word_end)
+  local line_segment = get_line_segment(line, start_pos, end_pos)
 
   -- Pattern: object.method() where cursor is on method
-  local full_method = line_segment:match(
-    "([%w_%.]+%." .. word:gsub("([%.%+%-%%%(%)%[%]%*%?%^%$])", "%%%1") .. ")%s*%("
-  )
+  local full_method = find_full_method(line_segment, word)
   if full_method then
     return full_method, "method"
   end
 
   -- Pattern: object.method() where cursor is on object
-  local method_pattern = word:gsub("([%.%+%-%%%(%)%[%]%*%?%^%$])", "%%%1") .. "%.([%w_]+)%s*%("
-  local method_name = line_segment:match(method_pattern)
+  local method_name = find_method_name(line_segment, word)
   if method_name then
     return word .. "." .. method_name, "method"
   end
 
-  -- Check for simple function call
-  if is_function_call(line, word, col) then
+  -- Check for simple function call: look for '(' after the word
+  local after_word = line:sub(end_pos + 1):match("^%s*(.)")
+  if after_word == "(" then
     return word, "function"
   end
 
   return nil
 end
 
+-- Tree-sitter helper functions
+local function check_treesitter_availability()
+  return pcall(require, "vim.treesitter")
+end
+
+local function get_parser(buf, language)
+  local success, parser = pcall(vim.treesitter.get_parser, buf, language)
+  if success and parser then
+    return parser
+  end
+  return nil
+end
+
+local function get_tree(parser)
+  local trees = parser:parse()
+  return trees[1]
+end
+
+local function get_node_at_cursor(buf, row, col)
+  return vim.treesitter.get_node({
+    bufnr = buf,
+    pos = { row, col },
+  })
+end
+
+local function is_function_call_node(node_type)
+  return node_type == "function_call"
+    or node_type == "call_expression"
+    or node_type == "call"
+    or node_type == "method_invocation"
+end
+
+local function get_function_nodes(current_node, field)
+  local function_nodes = current_node:field(field)
+  if function_nodes and function_nodes[1] then
+    return function_nodes[1]
+  end
+  return nil
+end
+
+local function extract_function_name(buf, function_node)
+  local source = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  if source and #source > 0 and function_node then
+    local ok, function_name = pcall(vim.treesitter.get_node_text, function_node, source)
+    if ok and function_name and function_name ~= "" then
+      local call_type = function_name:match("%.") and "method" or "function"
+      return function_name, call_type
+    end
+  end
+  return nil
+end
+
+local function try_extract_function_name(buf, current_node)
+  local function_fields = { "function", "name", "method" }
+  for _, field in ipairs(function_fields) do
+    local function_node = get_function_nodes(current_node, field)
+    if function_node then
+      local function_name, call_type = extract_function_name(buf, function_node)
+      if function_name then
+        return function_name, call_type
+      end
+    end
+  end
+  return nil
+end
+
 -- Tree-sitter based function detection (when available)
 local function treesitter_get_function_info(buf, row, col, language)
   -- Check if treesitter is available and has parser for this language
-  local has_treesitter = pcall(require, "vim.treesitter")
-  if not has_treesitter then
+  if not check_treesitter_availability() then
     return nil
   end
 
-  local _, parser = pcall(vim.treesitter.get_parser, buf, language)
-
+  local parser = get_parser(buf, language)
   if not parser then
     return nil
   end
 
-  local tree = parser:parse()[1]
+  local tree = get_tree(parser)
   if not tree then
     return nil
   end
 
   -- Get node under cursor
-  local node = vim.treesitter.get_node({
-    bufnr = buf,
-    pos = { row, col },
-  })
-
+  local node = get_node_at_cursor(buf, row, col)
   if not node then
     return nil
   end
@@ -150,32 +199,15 @@ local function treesitter_get_function_info(buf, row, col, language)
     local node_type = current_node:type()
 
     -- Check for function call node types
-    if
-      node_type == "function_call"
-      or node_type == "call_expression"
-      or node_type == "call"
-      or node_type == "method_invocation"
-    then
+    if is_function_call_node(node_type) then
       -- Try to get function name
-      local function_fields = { "function", "name", "method" }
-      for _, field in ipairs(function_fields) do
-        local function_nodes = current_node:field(field)
-        if function_nodes and function_nodes[1] then
-          local function_node = function_nodes[1]
-          local source = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-          if source and #source > 0 and function_node then
-            local ok, function_name = pcall(vim.treesitter.get_node_text, function_node, source)
-            if ok and function_name and function_name ~= "" then
-              local call_type = function_name:match("%.") and "method" or "function"
-              return function_name, call_type
-            end
-          end
-        end
+      local function_name, call_type = try_extract_function_name(buf, current_node)
+      if function_name then
+        return function_name, call_type
       end
     end
 
     local parent_node = current_node:parent()
-
     if not parent_node then
       break
     end
@@ -186,26 +218,54 @@ local function treesitter_get_function_info(buf, row, col, language)
   return nil
 end
 
-function M.get_function_under_cursor()
+-- Buffer information helper functions
+local function get_buffer_info()
   local buf = vim.api.nvim_get_current_buf()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local row = cursor[1] - 1 -- Convert to 0-indexed
   local col = cursor[2]
+  return buf, row, col
+end
+
+local function get_buffer_lines(buf)
+  return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+end
+
+local function validate_buffer_lines(all_lines, row)
+  return all_lines and #all_lines > 0 and row < #all_lines
+end
+
+local function get_current_line(all_lines, row)
+  return all_lines[row + 1] -- Convert to 1-indexed for array access
+end
+
+local function validate_current_line(current_line)
+  return current_line and current_line ~= ""
+end
+
+local function get_buffer_language(buf)
+  local language = vim.api.nvim_buf_get_option(buf, "filetype")
+  return language and language ~= "" and language or nil
+end
+
+-- Main function detection
+function M.get_function_under_cursor()
+  local buf, row, col = get_buffer_info()
 
   -- Get all lines for context
-  local all_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  if not all_lines or #all_lines == 0 or row >= #all_lines then
+  local all_lines = get_buffer_lines(buf)
+  if not validate_buffer_lines(all_lines, row) then
     return nil
   end
 
-  local current_line = all_lines[row + 1] -- Convert to 1-indexed for array access
-  if not current_line or current_line == "" then
+  local current_line = get_current_line(all_lines, row)
+  if not validate_current_line(current_line) then
     return nil
   end
 
   -- Get filetype/language
-  local language = vim.api.nvim_buf_get_option(buf, "filetype")
-  if not language or language == "" then
+  local language = get_buffer_language(buf)
+  if not language then
     return nil
   end
 
