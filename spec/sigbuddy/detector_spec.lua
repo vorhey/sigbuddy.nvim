@@ -29,6 +29,7 @@ describe("sigbuddy.detector", function()
 
     it("should return nil when cursor is not on a function call", function()
       local original_api = vim.api
+      local original_notify = vim.notify
       vim.api = {
         nvim_get_current_buf = function()
           return 1
@@ -42,12 +43,15 @@ describe("sigbuddy.detector", function()
         nvim_buf_get_option = function()
           return "lua"
         end,
+        nvim_echo = function() end, -- Mock nvim_echo
       }
+      vim.notify = function() end -- Mock vim.notify
 
       local result = detector.get_function_under_cursor()
       assert.is_nil(result)
 
       vim.api = original_api
+      vim.notify = original_notify
     end)
 
     it("should detect simple function call", function()
@@ -273,6 +277,7 @@ describe("sigbuddy.detector", function()
       for _, case in ipairs(test_cases) do
         local line, col = case[1], case[2]
         local original_api = vim.api
+        local original_notify = vim.notify
         vim.api = {
           nvim_get_current_buf = function()
             return 1
@@ -286,12 +291,15 @@ describe("sigbuddy.detector", function()
           nvim_buf_get_option = function()
             return "lua"
           end,
+          nvim_echo = function() end, -- Mock nvim_echo
         }
+        vim.notify = function() end -- Mock vim.notify
 
         local result = detector.get_function_under_cursor()
         assert.is_nil(result, "Should not detect function in: " .. line)
 
         vim.api = original_api
+        vim.notify = original_notify
       end
     end)
   end)
