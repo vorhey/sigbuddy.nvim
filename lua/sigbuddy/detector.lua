@@ -105,17 +105,12 @@ local function check_treesitter_availability()
   return pcall(require, "vim.treesitter")
 end
 
-local function get_parser(buf, language)
-  local success, parser = pcall(vim.treesitter.get_parser, buf, language)
-  if success and parser then
+local function get_parser(buf)
+  local ok, parser = pcall(vim.treesitter.get_parser, buf)
+  if ok and parser then
     return parser
   end
   return nil
-end
-
-local function get_tree(parser)
-  local trees = parser:parse()
-  return trees[1]
 end
 
 local function get_node_at_cursor(buf, row, col)
@@ -141,13 +136,13 @@ local function get_function_nodes(current_node, field)
 end
 
 local function extract_function_name(buf, function_node)
-  local source = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  if source and #source > 0 and function_node then
-    local ok, function_name = pcall(vim.treesitter.get_node_text, function_node, source)
-    if ok and function_name and function_name ~= "" then
-      local call_type = function_name:match("%.") and "method" or "function"
-      return function_name, call_type
-    end
+  if not function_node then
+    return nil
+  end
+  local ok, function_name = pcall(vim.treesitter.get_node_text, function_node, buf)
+  if ok and function_name and function_name ~= "" then
+    local call_type = function_name:match("%.") and "method" or "function"
+    return function_name, call_type
   end
   return nil
 end
@@ -167,19 +162,20 @@ local function try_extract_function_name(buf, current_node)
 end
 
 -- Tree-sitter based function detection (when available)
-local function treesitter_get_function_info(buf, row, col, language)
+local function treesitter_get_function_info(buf, row, col)
   -- Check if treesitter is available and has parser for this language
   if not check_treesitter_availability() then
     return nil
   end
 
-  local parser = get_parser(buf, language)
+  local parser = get_parser(buf)
   if not parser then
     return nil
   end
 
-  local tree = get_tree(parser)
-  if not tree then
+  -- Ensure we have a parsed tree available
+  local trees = parser:parse()
+  if not trees or not trees[1] then
     return nil
   end
 
@@ -270,7 +266,7 @@ function M.get_function_under_cursor()
   end
 
   -- Try tree-sitter first, fallback to regex
-  local function_name, call_type = treesitter_get_function_info(buf, row, col, language)
+  local function_name, call_type = treesitter_get_function_info(buf, row, col)
 
   if not function_name then
     -- Fallback to regex-based detection
