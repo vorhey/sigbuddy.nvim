@@ -11,7 +11,7 @@ function M.get_explanation(function_info, config, callback)
 
   -- Build the prompt
   local prompt = string.format(
-    "What does `%s` do in %s? Explain it simply in plain English, no more than 3 sentences then show a basic example. If it's not a built-in function, just say 'Not a built-in function.'",
+    "What does `%s` do in %s? Explain it simply in plain English, no more than 3 sentences then show a basic example.'",
     function_info.function_name,
     function_info.language
   )
