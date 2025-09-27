@@ -20,8 +20,10 @@ local default_opts = {
     },
     gemini = {
       api_key = nil,
-      model = "gemini-1.5-flash",
-      endpoint = nil, -- Will use default Google AI endpoint
+      model = "gemini-2.5-flash",
+      endpoint = nil,
+      max_tokens = 8192,
+      temperature = 0.1,
     },
     ollama = {
       api_key = nil,

@@ -28,27 +28,27 @@ function M.get_explanation(function_info, config, callback)
       },
     },
     generationConfig = {
-      maxOutputTokens = 200,
-      temperature = 0.1,
+      maxOutputTokens = config.max_tokens,
+      temperature = config.temperature,
     },
   }
 
-  -- Build URL with API key as query parameter (Gemini style)
+  -- Build URL (no API key in query parameter - using header instead)
   local base_url = config.endpoint
     or (
       "https://generativelanguage.googleapis.com/v1beta/models/"
       .. config.model
       .. ":generateContent"
     )
-  local url = base_url .. "?key=" .. config.api_key
 
   -- Use plenary.curl for async request
   local curl = require("plenary.curl")
 
-  curl.post(url, {
+  curl.post(base_url, {
     body = vim.fn.json_encode(payload),
     headers = {
       ["Content-Type"] = "application/json",
+      ["x-goog-api-key"] = config.api_key,
     },
     callback = function(response)
       -- Move all processing to main thread to avoid fast event context issues
@@ -56,14 +56,27 @@ function M.get_explanation(function_info, config, callback)
         local result
 
         if response.status ~= 200 then
+          local error_msg = "Gemini API Error"
+          if response.status == 401 then
+            error_msg = "Invalid API key. Please check your Gemini API configuration."
+          elseif response.status == 429 then
+            error_msg = "Rate limit exceeded. Please try again later."
+          elseif response.status == 403 then
+            error_msg = "API access forbidden. Check your API key permissions."
+          else
+            error_msg = "Gemini API returned HTTP " .. response.status
+          end
+
+          vim.notify("Sigbuddy: " .. error_msg, vim.log.levels.ERROR)
           result = {
             status = "error",
-            error = "HTTP " .. response.status .. ": " .. (response.body or "Unknown error"),
+            error = error_msg,
           }
         else
           -- Parse response
           local ok, response_data = pcall(vim.fn.json_decode, response.body)
           if not ok then
+            vim.notify("Sigbuddy: Failed to parse Gemini API response", vim.log.levels.ERROR)
             result = {
               status = "error",
               error = "Failed to parse response JSON",
@@ -87,18 +100,23 @@ function M.get_explanation(function_info, config, callback)
               }
             elseif response_data.error then
               -- Handle API errors
-              local error_msg = "API Error"
+              local error_msg = "Gemini API Error"
               if response_data.error.message then
                 error_msg = error_msg .. ": " .. response_data.error.message
               end
+              vim.notify("Sigbuddy: " .. error_msg, vim.log.levels.ERROR)
               result = {
                 status = "error",
                 error = error_msg,
               }
             else
+              vim.notify(
+                "Sigbuddy: Received unexpected response format from Gemini API",
+                vim.log.levels.ERROR
+              )
               result = {
                 status = "error",
-                error = "Invalid response format",
+                error = "Invalid response format from Gemini API",
               }
             end
           end
